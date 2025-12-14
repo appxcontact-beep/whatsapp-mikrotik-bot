@@ -1,5 +1,7 @@
-import makeWASocket, { useMultiFileAuthState } from "@whiskeysockets/baileys"
-import qrcode from "qrcode-terminal"
+import makeWASocket, {
+  useMultiFileAuthState,
+  fetchLatestBaileysVersion
+} from "@whiskeysockets/baileys"
 import axios from "axios"
 import express from "express"
 
@@ -13,14 +15,22 @@ const plans = {
 
 async function startBot() {
   const { state, saveCreds } = await useMultiFileAuthState("auth")
+  const { version } = await fetchLatestBaileysVersion()
 
-  const sock = makeWASocket({ auth: state })
+  const sock = makeWASocket({
+    version,
+    auth: state,
+    printQRInTerminal: false // 🔴 IMPORTANTE
+  })
 
   sock.ev.on("creds.update", saveCreds)
 
-  sock.ev.on("connection.update", ({ qr }) => {
-    if (qr) qrcode.generate(qr, { small: true })
-  })
+  // 🔑 GENERAR CÓDIGO DE VINCULACIÓN
+  if (!state.creds.registered) {
+    const phoneNumber = process.env.BOT_NUMBER // EJ: 5219991234567
+    const code = await sock.requestPairingCode(phoneNumber)
+    console.log("📲 CÓDIGO DE VINCULACIÓN:", code)
+  }
 
   sock.ev.on("messages.upsert", async ({ messages }) => {
     const msg = messages[0]
