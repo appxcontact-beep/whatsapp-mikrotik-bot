@@ -21,16 +21,25 @@ async function startBot() {
   const sock = makeWASocket({
     version,
     auth: state,
-    browser: ["Chrome", "Ubuntu", "22.04"]
+    browser: ["Chrome", "Ubuntu", "22.04"],
+    printQRInTerminal: false,     // ❌ QR OFF
+    generateHighQualityLinkPreview: false
   })
 
   sock.ev.on("creds.update", saveCreds)
 
-  // 🔑 ESPERAR A QUE LA CONEXIÓN ESTÉ LISTA
+  let pairingRequested = false
+
   sock.ev.on("connection.update", async (update) => {
     const { connection, lastDisconnect } = update
 
-    if (connection === "open" && !state.creds.registered) {
+    // 🔑 SOLO PAIRING CODE, UNA SOLA VEZ
+    if (
+      connection === "open" &&
+      !state.creds.registered &&
+      !pairingRequested
+    ) {
+      pairingRequested = true
       const phoneNumber = process.env.BOT_NUMBER
       const code = await sock.requestPairingCode(phoneNumber)
       console.log("📲 CÓDIGO DE VINCULACIÓN:", code)
@@ -39,6 +48,7 @@ async function startBot() {
     if (connection === "close") {
       const reason = lastDisconnect?.error?.output?.statusCode
       if (reason !== DisconnectReason.loggedOut) {
+        console.log("🔄 Reconectando...")
         startBot()
       }
     }
