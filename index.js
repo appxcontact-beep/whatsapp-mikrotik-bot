@@ -1,6 +1,7 @@
 import makeWASocket, {
   useMultiFileAuthState,
-  fetchLatestBaileysVersion
+  fetchLatestBaileysVersion,
+  DisconnectReason
 } from "@whiskeysockets/baileys"
 import axios from "axios"
 import express from "express"
@@ -20,17 +21,28 @@ async function startBot() {
   const sock = makeWASocket({
     version,
     auth: state,
-    printQRInTerminal: false // 🔴 IMPORTANTE
+    browser: ["Chrome", "Ubuntu", "22.04"]
   })
 
   sock.ev.on("creds.update", saveCreds)
 
-  // 🔑 GENERAR CÓDIGO DE VINCULACIÓN
-  if (!state.creds.registered) {
-    const phoneNumber = process.env.BOT_NUMBER // EJ: 5219991234567
-    const code = await sock.requestPairingCode(phoneNumber)
-    console.log("📲 CÓDIGO DE VINCULACIÓN:", code)
-  }
+  // 🔑 ESPERAR A QUE LA CONEXIÓN ESTÉ LISTA
+  sock.ev.on("connection.update", async (update) => {
+    const { connection, lastDisconnect } = update
+
+    if (connection === "open" && !state.creds.registered) {
+      const phoneNumber = process.env.BOT_NUMBER
+      const code = await sock.requestPairingCode(phoneNumber)
+      console.log("📲 CÓDIGO DE VINCULACIÓN:", code)
+    }
+
+    if (connection === "close") {
+      const reason = lastDisconnect?.error?.output?.statusCode
+      if (reason !== DisconnectReason.loggedOut) {
+        startBot()
+      }
+    }
+  })
 
   sock.ev.on("messages.upsert", async ({ messages }) => {
     const msg = messages[0]
